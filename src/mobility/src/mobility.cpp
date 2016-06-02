@@ -22,6 +22,10 @@
 #include <ros/ros.h>
 #include <signal.h>
 
+//Other
+#include <iostream>
+#include <vector>
+
 using namespace std;
 
 //Random number generator
@@ -39,6 +43,8 @@ float status_publish_interval = 5;
 float killSwitchTimeout = 10;
 std_msgs::Int16 targetDetected; //ID of the detected target
 bool targetsCollected [256] = {0}; //array of booleans indicating whether each target ID has been found
+vector <string> pattern;
+string path = "NN";
 
 // state machine states
 #define STATE_MACHINE_TRANSFORM	0
@@ -72,6 +78,13 @@ ros::Timer stateMachineTimer;
 ros::Timer publish_status_timer;
 ros::Timer killSwitchTimer;
 
+//Spiral
+void setTargetN();
+void setTargetE();
+void setTargetS();
+void setTargetW();
+void generatePattern();
+
 // OS Signal Handler
 void sigintEventHandler(int signal);
 
@@ -92,6 +105,7 @@ int main(int argc, char **argv) {
     string hostname(host);
 
     rng = new random_numbers::RandomNumberGenerator(); //instantiate random number generator
+
     goalLocation.theta = rng->uniformReal(0, 2 * M_PI); //set initial random heading
     
     targetDetected.data = -1; //initialize target detected
@@ -137,6 +151,8 @@ int main(int argc, char **argv) {
     return EXIT_SUCCESS;
 }
 
+
+
 void mobilityStateMachine(const ros::TimerEvent&) {
     std_msgs::String stateMachineMsg;
     
@@ -175,12 +191,19 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 				}
 				//Otherwise, assign a new goal
 				else {
-					 //select new heading from Gaussian distribution around current heading
-					goalLocation.theta = rng->gaussian(currentLocation.theta, 0.25);
+				  
+				  // setTargetN();
+				  // setTargetE();
+				  // setTargetS();
+				  // setTargetW();
+				  // //set new goal location according to pattern.
+				  // //call setTargets
+				  // 	//select new heading from Gaussian distribution around current heading
+				  // 	goalLocation.theta = rng->gaussian(currentLocation.theta, 0.25);
 					
-					//select new position 50 cm from current location
-					goalLocation.x = currentLocation.x + (0.5 * cos(goalLocation.theta));
-					goalLocation.y = currentLocation.y + (0.5 * sin(goalLocation.theta));
+				  //select new position 50 cm from current location
+				  // goalLocation.x = currentLocation.x + (0.5 * cos(goalLocation.theta));
+				  // goalLocation.y = currentLocation.y + (0.5 * sin(goalLocation.theta));
 				}
 				
 				//Purposefully fall through to next case without breaking
@@ -238,6 +261,47 @@ void mobilityStateMachine(const ros::TimerEvent&) {
     }
 }
 
+void setTargetN()
+{
+  ROS_INFO("In mobility.cpp:: setTargetN()");
+  goalLocation.theta = M_PI*0.5;
+  goalLocation.x = currentLocation.x + (0.5 * cos(goalLocation.theta));
+  goalLocation.y = currentLocation.y + (0.5 * sin(goalLocation.theta));
+}
+
+void setTargetE()
+{
+  goalLocation.theta = 0.0;
+  goalLocation.x = currentLocation.x + (0.5 * cos(goalLocation.theta));
+  goalLocation.y = currentLocation.y + (0.5 * sin(goalLocation.theta));
+}
+
+void setTargetS()
+{
+  goalLocation.theta = M_PI*-0.5;
+  goalLocation.x = currentLocation.x + (0.5 * cos(goalLocation.theta));
+  goalLocation.y = currentLocation.y + (0.5 * sin(goalLocation.theta));
+}
+
+void setTargetW()
+{
+  goalLocation.theta = M_PI;	
+  goalLocation.x = currentLocation.x + (0.5 * cos(goalLocation.theta));
+  goalLocation.y = currentLocation.y + (0.5 * sin(goalLocation.theta));
+}
+
+void generatePattern()
+{
+  string curDir;
+  pattern.push_back(path);
+  curDir = pattern[pattern.size() - 1];
+  pattern.pop_back();
+  if (pattern.size() == 0)
+    {
+      setVelocity(0.0, 0.0); //stop
+      stateMachineState = STATE_MACHINE_TRANSFORM; //move back to transform step
+    }  
+}
 void setVelocity(double linearVel, double angularVel) 
 {
   // Stopping and starting the timer causes it to start counting from 0 again.
@@ -357,7 +421,7 @@ void killSwitchTimerEventHandler(const ros::TimerEvent& t)
   // No movement commands for killSwitchTime seconds so stop the rover 
   setVelocity(0,0);
   double current_time = ros::Time::now().toSec();
-  ROS_INFO("In mobility.cpp:: killSwitchTimerEventHander(): Movement input timeout. Stopping the rover at %6.4f.", current_time);
+  //ROS_INFO("In mobility.cpp:: killSwitchTimerEventHander(): Movement input timeout. Stopping the rover at %6.4f.", current_time);
 }
 
 void targetsCollectedHandler(const std_msgs::Int16::ConstPtr& message) {
