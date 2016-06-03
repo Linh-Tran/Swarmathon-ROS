@@ -343,6 +343,7 @@ void generatePattern(int N_circuits, int N_robots)
 
 int calcDistanceTravel (int i_robot, int i_circuit, int N_robots, char dir)
 {
+  ROS_INFO("LT calDistanceTravel");
   int i = i_robot;
   int j = i_circuit;
   int N = N_robots;
@@ -391,13 +392,14 @@ int calcDistanceTravel (int i_robot, int i_circuit, int N_robots, char dir)
 
 void getPattern (string ith_pattern)
 {
+  ROS_INFO("LT getPattern");
   copy(ith_pattern.begin(), ith_pattern.end(), back_inserter(pattern));
   reverse(pattern.begin(), pattern.end());
 }
 
 void getTarget()
 {
-  // ROS_INFO("LT In mobility.cpp:: getTarget()");
+  ROS_INFO("LT In mobility.cpp:: getTarget()");
   if (targetHit() == true && pattern.size() > 0)
     {
       curDir = pattern [pattern.size()-1];
