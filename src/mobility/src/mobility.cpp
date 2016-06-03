@@ -43,8 +43,9 @@ float status_publish_interval = 5;
 float killSwitchTimeout = 10;
 std_msgs::Int16 targetDetected; //ID of the detected target
 bool targetsCollected [256] = {0}; //array of booleans indicating whether each target ID has been found
-vector <string> pattern;
-string path = "NN";
+vector <char> pattern;
+char path = 'E';
+char curDir;
 
 // state machine states
 #define STATE_MACHINE_TRANSFORM	0
@@ -84,6 +85,7 @@ void setTargetE();
 void setTargetS();
 void setTargetW();
 void generatePattern();
+void getTarget();
 
 // OS Signal Handler
 void sigintEventHandler(int signal);
@@ -191,11 +193,9 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 				}
 				//Otherwise, assign a new goal
 				else {
-				  
-				  // setTargetN();
-				  // setTargetE();
-				  // setTargetS();
-				  // setTargetW();
+          //setTargetN();					
+          generatePattern();
+					getTarget();
 				  // //set new goal location according to pattern.
 				  // //call setTargets
 				  // 	//select new heading from Gaussian distribution around current heading
@@ -263,7 +263,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 
 void setTargetN()
 {
-  ROS_INFO("In mobility.cpp:: setTargetN()");
+  ROS_INFO("LT In mobility.cpp:: setTargetN()");
   goalLocation.theta = M_PI*0.5;
   goalLocation.x = currentLocation.x + (0.5 * cos(goalLocation.theta));
   goalLocation.y = currentLocation.y + (0.5 * sin(goalLocation.theta));
@@ -271,6 +271,7 @@ void setTargetN()
 
 void setTargetE()
 {
+  ROS_INFO("LT In mobility.cpp:: setTargetE()");
   goalLocation.theta = 0.0;
   goalLocation.x = currentLocation.x + (0.5 * cos(goalLocation.theta));
   goalLocation.y = currentLocation.y + (0.5 * sin(goalLocation.theta));
@@ -278,6 +279,7 @@ void setTargetE()
 
 void setTargetS()
 {
+  ROS_INFO("LT In mobility.cpp:: setTargetS()");
   goalLocation.theta = M_PI*-0.5;
   goalLocation.x = currentLocation.x + (0.5 * cos(goalLocation.theta));
   goalLocation.y = currentLocation.y + (0.5 * sin(goalLocation.theta));
@@ -285,6 +287,7 @@ void setTargetS()
 
 void setTargetW()
 {
+  ROS_INFO("LT In mobility.cpp:: setTargetW()");
   goalLocation.theta = M_PI;	
   goalLocation.x = currentLocation.x + (0.5 * cos(goalLocation.theta));
   goalLocation.y = currentLocation.y + (0.5 * sin(goalLocation.theta));
@@ -292,15 +295,49 @@ void setTargetW()
 
 void generatePattern()
 {
-  string curDir;
-  pattern.push_back(path);
-  curDir = pattern[pattern.size() - 1];
-  pattern.pop_back();
-  if (pattern.size() == 0)
+  string 
+  ROS_INFO("LT In mobility.cpp:: generatePattern()");
+  /*for (int i = 0; i <= 16; i++)
+  {
+    for (int j = 0; i <= 4; j++)
     {
-      setVelocity(0.0, 0.0); //stop
-      stateMachineState = STATE_MACHINE_TRANSFORM; //move back to transform step
-    }  
+      
+    }
+  }*/
+	pattern.push_back(path);
+}
+
+void getTarget()
+{
+  ROS_INFO("LT In mobility.cpp:: getTarget()");
+	if (pattern.size() > 0)
+	{
+		  curDir = pattern [pattern.size()-1];
+		  ROS_INFO("LT curDir::", curDir);	
+		      switch(curDir)
+		      {
+		          case 'N':
+		              setTargetN();
+		              break;
+		          case 'S':
+		              setTargetS();
+		              break;
+		          case 'E':
+		              setTargetE();
+		              break;
+		          case 'W':
+		              setTargetW();
+		              break;
+				}
+		pattern.pop_back();
+	}
+	
+	else if (pattern.size() == 0)
+	{
+			stateMachineState = STATE_MACHINE_TRANSLATE;
+			/*setVelocity(0.0, 0.0); //stop
+      stateMachineState = STATE_MACHINE_TRANSFORM; //move back to transform step8*/
+	}
 }
 void setVelocity(double linearVel, double angularVel) 
 {
