@@ -107,8 +107,6 @@ void killSwitchTimerEventHandler(const ros::TimerEvent& event);
 
 int main(int argc, char **argv) {
 
-  generatePattern(3,6);
-  // printPattern();
   gethostname(host, sizeof (host));
   string hostname(host);
 
@@ -153,7 +151,8 @@ int main(int argc, char **argv) {
   publish_status_timer = mNH.createTimer(ros::Duration(status_publish_interval), publishStatusTimerEventHandler);
   //killSwitchTimer = mNH.createTimer(ros::Duration(killSwitchTimeout), killSwitchTimerEventHandler);
   stateMachineTimer = mNH.createTimer(ros::Duration(mobilityLoopTimeStep), mobilityStateMachine);
-    
+  
+  generatePattern(3,3);
   ros::spin();
   return EXIT_SUCCESS;
 }
@@ -194,10 +193,9 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 	}
       }
       //Otherwise, assign a new goal
-      else {
-	//setTargetN();					
+      else {				
 	getTarget();
-	ROS_INFO("LT line 201");
+	ROS_INFO("LT line 199");
 	goalLocation.x = currentLocation.x + (0.5* cos(goalLocation.theta));
 	goalLocation.y = currentLocation.y + (0.5* sin(goalLocation.theta));
 	// //set new goal location according to pattern.
@@ -267,26 +265,26 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 
 void setTargetN()
 {
-  ROS_INFO("LT In mobility.cpp:: setTargetN()");
+  //ROS_INFO("LT In mobility.cpp:: setTargetN()");
   goalLocation.theta = M_PI*0.5;
  
 }
 
 void setTargetE()
 {
-  ROS_INFO("LT In mobility.cpp:: setTargetE()");
+  //ROS_INFO("LT In mobility.cpp:: setTargetE()");
   goalLocation.theta = 0.0;
 }
 
 void setTargetS()
 {
-  ROS_INFO("LT In mobility.cpp:: setTargetS()");
+  //ROS_INFO("LT In mobility.cpp:: setTargetS()");
   goalLocation.theta = M_PI*-0.5;
 }
 
 void setTargetW()
 {
-  ROS_INFO("LT In mobility.cpp:: setTargetW()");
+  // ROS_INFO("LT In mobility.cpp:: setTargetW()");
   goalLocation.theta = M_PI;	
   // goalLocation.x = currentLocation.x + (0.5 * cos(goalLocation.theta));
   // goalLocation.y = currentLocation.y + (0.5 * sin(goalLocation.theta));
@@ -428,7 +426,7 @@ void getTarget()
 	
   else if (pattern.size() == 0)
     { 
-      // ROS_INFO("LT size == 0");
+      ROS_INFO("LT size == 0");
       stateMachineState = STATE_MACHINE_TRANSLATE;
       //setVelocity(0.0, 0.0); //stop
       // stateMachineState = STATE_MACHINE_TRANSFORM; //move back to transform step8*/
