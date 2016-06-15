@@ -51,6 +51,7 @@ char curDir;
 #define STATE_MACHINE_TRANSFORM	0
 #define STATE_MACHINE_ROTATE	1
 #define STATE_MACHINE_TRANSLATE	2
+#define MAX_NUM_ROBOTS 		6
 int stateMachineState = STATE_MACHINE_TRANSFORM;
 
 geometry_msgs::Twist velocity;
@@ -85,11 +86,12 @@ void setTargetE();
 void setTargetS();
 void setTargetW();
 void generatePattern(int N_circuits, int N_robots);
-//void printPattern();
+void printPattern();
 int  calcDistanceTravel (int i_robot, int i_circuit, int N_robots, char dir);
 void getPattern(string ith_pattern);
 void getTarget();
 bool targetHit();
+int roverNameToIndex( string roverName );
 
 // OS Signal Handler
 void sigintEventHandler(int signal);
@@ -152,15 +154,16 @@ int main(int argc, char **argv) {
   //killSwitchTimer = mNH.createTimer(ros::Duration(killSwitchTimeout), killSwitchTimerEventHandler);
   stateMachineTimer = mNH.createTimer(ros::Duration(mobilityLoopTimeStep), mobilityStateMachine);
   
-  generatePattern(3,3);
+  generatePattern(3,MAX_NUM_ROBOTS); //circuit,robots
   ros::spin();
+  printPattern();
   return EXIT_SUCCESS;
 }
 
 void mobilityStateMachine(const ros::TimerEvent&) {
   std_msgs::String stateMachineMsg;
   if (currentMode == 2 || currentMode == 3) { //Robot is in automode
-
+  
     switch(stateMachineState) {
 			
       //Select rotation or translation based on required adjustment
@@ -195,32 +198,24 @@ void mobilityStateMachine(const ros::TimerEvent&) {
       //Otherwise, assign a new goal
       else {				
 	getTarget();
-	ROS_INFO("LT line 199");
-	goalLocation.x = currentLocation.x + (0.5* cos(goalLocation.theta));
-	goalLocation.y = currentLocation.y + (0.5* sin(goalLocation.theta));
-	// //set new goal location according to pattern.
-	// //call setTargets
-	// 	//select new heading from Gaussian distribution around current heading
-	// 	goalLocation.theta = rng->gaussian(currentLocation.theta, 0.25);
-					
-	//select new position 50 cm from current location
-	// goalLocation.x = currentLocation.x + (0.5 * cos(goalLocation.theta));
-	// goalLocation.y = currentLocation.y + (0.5 * sin(goalLocation.theta));
+	float distance = 1.5; //meters 
+	goalLocation.x = currentLocation.x + (distance* cos(goalLocation.theta));
+	goalLocation.y = currentLocation.y + (distance* sin(goalLocation.theta));
       }
-				
+
       //Purposefully fall through to next case without breaking
     }
 			
-      //Calculate angle between currentLocation.theta and goalLocation.theta
+      //Calculate angle between theta and goalLocation.theta
       //Rotate left or right depending on sign of angle
       //Stay in this state until angle is minimized
     case STATE_MACHINE_ROTATE: {
       stateMachineMsg.data = "ROTATING";
       if (angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta) > 0.1) {
-	setVelocity(0.0, 0.5); //rotate left
+	setVelocity(0.0, 0.2); //rotate left
       }
       else if (angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta) < -0.1) {
-	setVelocity(0.0, -0.5); //rotate right
+	setVelocity(0.0, -0.2); //rotate right
       }
       else {
 	setVelocity(0.0, 0.0); //stop
@@ -237,8 +232,8 @@ void mobilityStateMachine(const ros::TimerEvent&) {
       if (fabs(angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x))) < M_PI_2) {
 	setVelocity(0.3, 0.0);
       }
-      else {
-	setVelocity(0.0, 0.0); //stop
+      else {	
+	setVelocity(0.0, 0.0); //stop	
 	stateMachineState = STATE_MACHINE_TRANSFORM; //move back to transform step
       }
       break;
@@ -265,37 +260,30 @@ void mobilityStateMachine(const ros::TimerEvent&) {
 
 void setTargetN()
 {
-  //ROS_INFO("LT In mobility.cpp:: setTargetN()");
   goalLocation.theta = M_PI*0.5;
- 
 }
 
 void setTargetE()
 {
-  //ROS_INFO("LT In mobility.cpp:: setTargetE()");
   goalLocation.theta = 0.0;
 }
 
 void setTargetS()
 {
-  //ROS_INFO("LT In mobility.cpp:: setTargetS()");
   goalLocation.theta = M_PI*-0.5;
 }
 
 void setTargetW()
 {
-  // ROS_INFO("LT In mobility.cpp:: setTargetW()");
   goalLocation.theta = M_PI;	
-  // goalLocation.x = currentLocation.x + (0.5 * cos(goalLocation.theta));
-  // goalLocation.y = currentLocation.y + (0.5 * sin(goalLocation.theta));
 }
 
 void generatePattern(int N_circuits, int N_robots)
-{
-  ROS_INFO("LT In mobility.cpp:: generatePattern()");
-  
+{  
   vector<string> paths;
   string ith_path;
+  int robotNumber = 0;
+  robotNumber = roverNameToIndex(publishedName);
 
   for (int i_robot = 1; i_robot <= N_robots; i_robot++)
     {
@@ -324,24 +312,24 @@ void generatePattern(int N_circuits, int N_robots)
             {
 	      ith_path += 'W';
             }
-
         }
+
+	paths.push_back(ith_path);
+  	ith_path.clear();
     }	
-  paths.push_back(ith_path);
-  ith_path.clear();
+  getPattern(paths[robotNumber]);
 }
 
-// void printPattern()
-// {
-//   for (int i = 0; i<pattern.size(); i++)
-//     {
-//       ROS_INFO("LT path::", pattern[i]);
-//     }
-// }
+void printPattern()
+{
+  for (int i = 0; i<pattern.size(); i++)
+    {
+      ROS_INFO("LT path:: %c", pattern[i]);
+    }
+}
 
 int calcDistanceTravel (int i_robot, int i_circuit, int N_robots, char dir)
 {
-  ROS_INFO("LT calDistanceTravel");
   int i = i_robot;
   int j = i_circuit;
   int N = N_robots;
@@ -390,35 +378,28 @@ int calcDistanceTravel (int i_robot, int i_circuit, int N_robots, char dir)
 
 void getPattern (string ith_pattern)
 {
-  ROS_INFO("LT getPattern");
   copy(ith_pattern.begin(), ith_pattern.end(), back_inserter(pattern));
   reverse(pattern.begin(), pattern.end());
 }
 
 void getTarget()
 {
-  ROS_INFO("LT In mobility.cpp:: getTarget()");
-  if (targetHit() == true && pattern.size() > 0)
+  if (pattern.size() > 0 && targetHit() == true) 
     {
       curDir = pattern [pattern.size()-1];
-      ROS_INFO("LT inside if");	
       switch(curDir)
 	{
 	case 'N':
 	  setTargetN();
-	  ROS_INFO("LT N");
 	  break;
 	case 'S':
 	  setTargetS();
-	  ROS_INFO("LT S");
 	  break;
 	case 'E':
 	  setTargetE();
-	  ROS_INFO("LT E");
 	  break;
 	case 'W':
 	  setTargetW();
-	  ROS_INFO("LT W");
 	  break;
 	}
       pattern.pop_back();
@@ -426,10 +407,8 @@ void getTarget()
 	
   else if (pattern.size() == 0)
     { 
-      ROS_INFO("LT size == 0");
-      stateMachineState = STATE_MACHINE_TRANSLATE;
-      //setVelocity(0.0, 0.0); //stop
-      // stateMachineState = STATE_MACHINE_TRANSFORM; //move back to transform step8*/
+	setVelocity(0.0, 0.0);
+	//stateMachineState = STATE_MACHINE_TRANSFORM;
     }
 }
 
@@ -438,6 +417,7 @@ bool targetHit()
   bool hit = false;
   if (hypot(goalLocation.x-currentLocation.x, goalLocation.y - currentLocation.y) < 0.5)
     {
+	//ROS_INFO("LT TargetHit!");
       hit = true;
     }
   return hit;
@@ -561,11 +541,40 @@ void killSwitchTimerEventHandler(const ros::TimerEvent& t)
   // No movement commands for killSwitchTime seconds so stop the rover 
   setVelocity(0,0);
   double current_time = ros::Time::now().toSec();
-  //ROS_INFO("In mobility.cpp:: killSwitchTimerEventHander(): Movement input timeout. Stopping the rover at %6.4f.", current_time);
+  ROS_INFO("In mobility.cpp:: killSwitchTimerEventHander(): Movement input timeout. Stopping the rover at %6.4f.", current_time);
 }
 
 void targetsCollectedHandler(const std_msgs::Int16::ConstPtr& message) {
   targetsCollected[message->data] = 1;
+}
+
+// Determines the unique ID based on the rover name. Only for sim rovers.
+int roverNameToIndex( string roverName ) {
+	
+	if (publishName.compare("achilles") == 0)
+	{
+		return 0;
+	}
+	else if (publishName.compare("aeneas") == 0)
+	{
+		return 1;
+	}
+	else if (publishName.compare("ajax") == 0)
+	{
+		return 2;
+	}
+	else if (publishName.compare("diomedes") == 0)
+	{
+		return 3;
+	}
+	else if (publishName.compare("hector") == 0)
+	{
+		return 4;
+	}
+	else
+	{
+		return 5;
+	}
 }
 
 void sigintEventHandler(int sig)
