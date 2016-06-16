@@ -37,13 +37,14 @@ void setVelocity(double linearVel, double angularVel);
 //Numeric Variables
 geometry_msgs::Pose2D currentLocation;
 geometry_msgs::Pose2D goalLocation;
+geometry_msgs::Pose2D returnPosition;
 int currentMode = 0;
 float mobilityLoopTimeStep = 0.1; //time between the mobility loop calls
 float status_publish_interval = 5;
 float killSwitchTimeout = 10;
 std_msgs::Int16 targetDetected; //ID of the detected target
 bool targetsCollected [256] = {0}; //array of booleans indicating whether each target ID has been found
-
+float stepSize = 0.25; //meters
 vector <char> pattern;
 char curDir;
 
@@ -51,7 +52,11 @@ char curDir;
 #define STATE_MACHINE_TRANSFORM	0
 #define STATE_MACHINE_ROTATE	1
 #define STATE_MACHINE_TRANSLATE	2
-#define MAX_NUM_ROBOTS 		6
+#define MAX_NUM_ROBOTS 		3
+#define SEARCHING               4
+#define RETURN_TO_NEST          5
+#define RETURN_TO_SEARCH        6
+
 int stateMachineState = STATE_MACHINE_TRANSFORM;
 
 geometry_msgs::Twist velocity;
@@ -91,8 +96,8 @@ int  calcDistanceTravel (int i_robot, int i_circuit, int N_robots, char dir);
 void getPattern(string ith_pattern);
 void getTarget();
 bool targetHit();
-int roverNameToIndex( string roverName );
-
+int  roverNameToIndex(string roverName);
+void setHeadingToNest();
 // OS Signal Handler
 void sigintEventHandler(int signal);
 
@@ -119,8 +124,8 @@ int main(int argc, char **argv) {
   targetDetected.data = -1; //initialize target detected
     
   //select initial search position 50 cm from center (0,0)
-  goalLocation.x = 0.5 * cos(goalLocation.theta);
-  goalLocation.y = 0.5 * sin(goalLocation.theta);
+  goalLocation.x = stepSize * cos(goalLocation.theta);
+  goalLocation.y = stepSize * sin(goalLocation.theta);
 
   if (argc >= 2) {
     publishedName = argv[1];
@@ -169,6 +174,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
       //Select rotation or translation based on required adjustment
       //If no adjustment needed, select new goal
     case STATE_MACHINE_TRANSFORM: {
+      //searching
       stateMachineMsg.data = "TRANSFORMING";
       //If angle between current and goal is significant
       if (fabs(angles::shortest_angular_distance(currentLocation.theta, goalLocation.theta)) > 0.1) {
@@ -182,25 +188,32 @@ void mobilityStateMachine(const ros::TimerEvent&) {
       else if (targetDetected.data != -1) {
 	//If goal has not yet been reached
 	if (hypot(0.0 - currentLocation.x, 0.0 - currentLocation.y) > 0.5) {
-	  //set angle to center as goal heading
-	  goalLocation.theta = M_PI + atan2(currentLocation.y, currentLocation.x);
-						
-	  //set center as goal position
-	  goalLocation.x = 0.0;
-	  goalLocation.y = 0.0;
+		setHeadingToNest();
 	}
+	else if (targetHit() == true){
+		ROS_INFO("LT targetHit");
+		//Save current location in spiral
+		returnPosition.x = currentLocation.x;
+		returnPosition.y = currentLocation.y;
+	  	returnPosition.theta = currentLocation.theta;
+		
+	}
+
 	//Otherwise, reset target and select new random uniform heading
 	else {
 	  targetDetected.data = -1;
-	  setTargetN();
+	  goalLocation.theta = returnPosition.theta;
+	  goalLocation.x = returnPosition.x;
+	  goalLocation.y = returnPosition.y;		
+	  //go back to previous spot in spiral
+	  
 	}
       }
       //Otherwise, assign a new goal
       else {				
 	getTarget();
-	float distance = 1.5; //meters 
-	goalLocation.x = currentLocation.x + (distance* cos(goalLocation.theta));
-	goalLocation.y = currentLocation.y + (distance* sin(goalLocation.theta));
+	goalLocation.x = currentLocation.x + (stepSize* cos(goalLocation.theta));
+	goalLocation.y = currentLocation.y + (stepSize* sin(goalLocation.theta));
       }
 
       //Purposefully fall through to next case without breaking
@@ -227,6 +240,7 @@ void mobilityStateMachine(const ros::TimerEvent&) {
       //Calculate angle between currentLocation.x/y and goalLocation.x/y
       //Drive forward
       //Stay in this state until angle is at least PI/2
+      //searching
     case STATE_MACHINE_TRANSLATE: {
       stateMachineMsg.data = "TRANSLATING";
       if (fabs(angles::shortest_angular_distance(currentLocation.theta, atan2(goalLocation.y - currentLocation.y, goalLocation.x - currentLocation.x))) < M_PI_2) {
@@ -314,8 +328,8 @@ void generatePattern(int N_circuits, int N_robots)
             }
         }
 
-	paths.push_back(ith_path);
-  	ith_path.clear();
+      paths.push_back(ith_path);
+      ith_path.clear();
     }	
   getPattern(paths[robotNumber]);
 }
@@ -407,8 +421,8 @@ void getTarget()
 	
   else if (pattern.size() == 0)
     { 
-	setVelocity(0.0, 0.0);
-	//stateMachineState = STATE_MACHINE_TRANSFORM;
+      setVelocity(0.0, 0.0);
+      //stateMachineState = STATE_MACHINE_TRANSFORM;
     }
 }
 
@@ -417,10 +431,17 @@ bool targetHit()
   bool hit = false;
   if (hypot(goalLocation.x-currentLocation.x, goalLocation.y - currentLocation.y) < 0.5)
     {
-	//ROS_INFO("LT TargetHit!");
       hit = true;
     }
   return hit;
+}
+
+void setHeadingToNest()
+{ 
+   goalLocation.theta = M_PI + atan2(currentLocation.y, currentLocation.x);
+   //set center as goal position
+   goalLocation.x = 0.0;
+   goalLocation.y = 0.0;
 }
 void setVelocity(double linearVel, double angularVel) 
 {
@@ -460,17 +481,14 @@ void targetHandler(const shared_messages::TagsImage::ConstPtr& message) {
       targetDetected.data = message->tags.data[0];
 			
       //set angle to center as goal heading
-      goalLocation.theta = M_PI + atan2(currentLocation.y, currentLocation.x);
-			
-      //set center as goal position
-      goalLocation.x = 0.0;
-      goalLocation.y = 0.0;
+      setHeadingToNest();
 			
       //publish detected target
       targetCollectedPublish.publish(targetDetected);
 
       //publish to scoring code
       targetPickUpPublish.publish(message->image);
+      
 
       //switch to transform state to trigger return to center
       stateMachineState = STATE_MACHINE_TRANSFORM;
@@ -498,8 +516,8 @@ void obstacleHandler(const std_msgs::UInt8::ConstPtr& message) {
     }
 							
     //select new position 50 cm from current location
-    goalLocation.x = currentLocation.x + (0.5 * cos(goalLocation.theta));
-    goalLocation.y = currentLocation.y + (0.5 * sin(goalLocation.theta));
+    goalLocation.x = currentLocation.x + (stepSize * cos(goalLocation.theta));
+    goalLocation.y = currentLocation.y + (stepSize * sin(goalLocation.theta));
 		
     //switch to transform state to trigger collision avoidance
     stateMachineState = STATE_MACHINE_TRANSFORM;
@@ -551,30 +569,30 @@ void targetsCollectedHandler(const std_msgs::Int16::ConstPtr& message) {
 // Determines the unique ID based on the rover name. Only for sim rovers.
 int roverNameToIndex( string roverName ) {
 	
-	if (publishName.compare("achilles") == 0)
-	{
-		return 0;
-	}
-	else if (publishName.compare("aeneas") == 0)
-	{
-		return 1;
-	}
-	else if (publishName.compare("ajax") == 0)
-	{
-		return 2;
-	}
-	else if (publishName.compare("diomedes") == 0)
-	{
-		return 3;
-	}
-	else if (publishName.compare("hector") == 0)
-	{
-		return 4;
-	}
-	else
-	{
-		return 5;
-	}
+  if (publishedName.compare("achilles") == 0)
+    {
+      return 0;
+    }
+  else if (publishedName.compare("aeneas") == 0)
+    {
+      return 1;
+    }
+  else if (publishedName.compare("ajax") == 0)
+    {
+      return 2;
+    }
+  else if (publishedName.compare("diomedes") == 0)
+    {
+      return 3;
+    }
+  else if (publishedName.compare("hector") == 0)
+    {
+      return 4;
+    }
+  else
+    {
+      return 5;
+    }
 }
 
 void sigintEventHandler(int sig)
